@@ -1,5 +1,36 @@
-module NooBdd where
+module NooBdd (
+  -- type:
+  Bdd,
+  Assignment,
+  -- creation:
+  top,
+  bot,
+  var,
+  -- combination and manipulation:
+  neg,
+  con,
+  dis,
+  imp,
+  equ,
+  forall,
+  forallSet,
+  exists,
+  existsSet,
+  restrict,
+  restrictSet,
+  -- get satisfying assignments:
+  allSats,
+  allSatsWith,
+  anySat,
+  anySatWith,
+  -- visualization
+  genGraph,
+  showGraph
+  -- ...
+  ) where
+
 import Data.List
+import System.Process
 
 data Bdd = Top | Bot | Node Int Bdd Bdd deriving (Show,Eq)
 
@@ -71,8 +102,9 @@ forallSet :: [Int] -> Bdd -> Bdd
 forallSet _ Top = Top
 forallSet _ Bot = Bot
 forallSet ns (Node n lhs rhs) =
-  if (elem n ns) then (con lhs rhs) else (Node n (forallSet ns lhs) (forallSet ns rhs))
-
+  if (elem n ns)
+    then (con (forallSet ns lhs) (forallSet ns rhs))
+    else (Node n (forallSet ns lhs) (forallSet ns rhs))
 
 restrict :: Bdd -> (Int,Bool) -> Bdd
 restrict Top _ = Top
@@ -83,19 +115,36 @@ restrict (Node n lhs rhs) (m,b) =
     (True,True) -> rhs
     (False,_) -> (Node n (restrict lhs (m,b)) (restrict rhs (m,b)))
 
+restrictSet :: Bdd -> [(Int,Bool)] -> Bdd
+restrictSet Top _ = Top
+restrictSet Bot _ = Bot
+restrictSet (Node n lhs rhs) list =
+  compress $ case (lookup n list) of
+    Nothing    -> (Node n (restrictSet lhs list) (restrictSet rhs list))
+    Just False -> restrictSet lhs list
+    Just True  -> restrictSet rhs list
+
 exists :: Int -> Bdd -> Bdd
 exists _ Top = Top
 exists _ Bot = Bot
 exists n (Node m lhs rhs) =
-  if (n==m) then (dis lhs rhs) else (Node m (forall n lhs) (forall n rhs))
+  if (n==m) then (dis lhs rhs) else (Node m (exists n lhs) (exists n rhs))
 
+existsSet :: [Int] -> Bdd -> Bdd
+existsSet _ Top = Top
+existsSet _ Bot = Bot
+existsSet ns (Node n lhs rhs) =
+  if (elem n ns)
+    then (dis (existsSet ns lhs) (existsSet ns rhs))
+    else (Node n (existsSet ns lhs) (existsSet ns rhs))
+  
 example :: Int -> Bdd
 example 0 = equ (con (var 1) (dis (neg $ var 1) (var 0))) (con (var 0) (var 1))
 example _ = Bot
 
 type Assignment = [(Int,Bool)] -- TODO: Ord instance, to beautify allSatsWith
 
--- partial "just enough" assignments
+-- get all partial "just enough" assignments
 allSats :: Bdd -> [Assignment]
 allSats Top = [ [] ]
 allSats Bot = [    ]
@@ -103,17 +152,61 @@ allSats (Node n lhs rhs) =
   [ ((n,False):rest) | rest <- allSats lhs ] ++
   [ ((n,True ):rest) | rest <- allSats rhs ]
 
--- complete assignments, given a set of all vars
+-- given a set of all vars, complete an assignment
+completeAss :: [Int] -> Assignment -> [Assignment]
+completeAss allvars ass =
+  if (addvars ass == [])
+    then [ass]
+    else concat $ map (completeAss allvars) (extend ass (head (addvars ass)))
+  where
+    addvars s = allvars \\ (sort $ map fst s)
+    extend s v = [ ((v,False):s), ((v,True):s) ]
+  
+-- given a set of all vars, get all complete assignments
 -- (including those which might have disappeared in the BDD)
-allSatsWith :: Bdd -> [Int] -> [Assignment]
-allSatsWith b allvars = concat $ map complete (allSats b) where
-  complete sat =
-    if (addvars sat == [])
-      then [sat]
-      else concat $ map complete (extend sat (head (addvars sat)))
-    where
-      addvars s = allvars \\ (sort $ map fst s)
-      extend s v = [ ((v,False):s), ((v,True):s) ]
+allSatsWith :: [Int] -> Bdd -> [Assignment]
+allSatsWith allvars b = concat $ map (completeAss allvars) (allSats b) where
+
+-- find the lexicographically smallest satisfying assignment
+anySat :: Bdd -> Maybe Assignment
+anySat Top = Just []
+anySat Bot = Nothing
+anySat (Node v lhs rhs) = 
+  case lhs of
+       Top  -> Just []
+       Bot  -> Just ((v,True ):rest) where (Just rest) = (anySat rhs)
+       _    -> Just ((v,False):rest) where (Just rest) = (anySat lhs)
+
+anySatWith :: [Int] -> Bdd -> Maybe Assignment
+anySatWith _       Bot = Nothing
+anySatWith allvars b   = Just $ head $ completeAss allvars ass where (Just ass) = (anySat b)
+
+genGraph :: Bdd -> String
+genGraph Bot = "digraph g { Bot [label=\"0\",shape=\"box\"]; }"
+genGraph Top = "digraph g { Top [label=\"1\",shape=\"box\"]; }"
+genGraph b = "digraph g {\n" ++ (genGraphStep "" b) ++ sinks ++ "}"
+  where
+    genGraphStep _ Top = ""
+    genGraphStep _ Bot = ""
+    genGraphStep p (Node v lhs rhs) =
+      "v"++(show v)++"x"++p++" [label=\""++(show v)++"\",shape=\"circle\"];\n"
+      ++ case lhs of
+	Top -> "v"++(show v)++"x"++p++" -> Top [style=dashed];\n"
+	Bot -> "v"++(show v)++"x"++p++" -> Bot [style=dashed];\n"
+	(Node v' _ _) -> "v"++(show v)++"x"++p++" -> v"++(show v')++"x"++('0':p)++" [style=dashed];\n"
+	++ genGraphStep ('0':p) lhs
+      ++ case rhs of
+	Top -> "v"++(show v)++"x"++p++" -> Top;\n"
+	Bot -> "v"++(show v)++"x"++p++" -> Bot;\n"
+	(Node v' _ _) -> "v"++(show v)++"x"++p++" -> v"++(show v')++"x"++('1':p)++";\n"
+	++ genGraphStep ('1':p) rhs
+    sinks = "Bot [label=\"0\",shape=\"box\"];\n" ++ "Top [label=\"1\",shape=\"box\"];\n"
+
+showGraph :: Bdd -> IO ()
+showGraph b = do
+  let string = genGraph b
+  _ <- system ("echo '"++string++"' | dot -Tx11")
+  return ()
 
 -- TODO:
 
@@ -121,12 +214,8 @@ allSatsWith b allvars = concat $ map complete (allSats b) where
 -- disSet
 -- forallSet
 -- existsSet
--- restrictSet
 
 -- satcount
--- anysat
-
--- graphviz
 
 -- IDEAS:
 -- randomSat -- with correct probabilities, returning IO Bdd
