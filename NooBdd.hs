@@ -1,4 +1,4 @@
-module NooBdd (
+module Data.NooBdd (
   -- type:
   Bdd,
   Assignment,
@@ -91,6 +91,20 @@ compress Top = Top
 compress Bot = Bot
 compress (Node k lhs rhs) =
   if (lhs == rhs) then lhs else (Node k (compress lhs) (compress rhs))
+
+conSet :: [Bdd] -> Bdd
+conSet [] = Top
+conSet (b:bs) =
+  if elem Bot (b:bs)
+    then Bot
+    else foldl con b bs
+    
+disSet :: [Bdd] -> Bdd
+disSet [] = Bot
+disSet (b:bs) =
+  if elem Top (b:bs)
+    then Top
+    else foldl dis b bs
 
 forall :: Int -> Bdd -> Bdd
 forall _ Top = Top
@@ -209,14 +223,6 @@ showGraph b = do
   return ()
 
 -- TODO:
-
--- conSet
--- disSet
--- forallSet
--- existsSet
-
 -- satcount
-
--- IDEAS:
 -- randomSat -- with correct probabilities, returning IO Bdd
 -- boolean apply and forall in parallel -- for optimization?
