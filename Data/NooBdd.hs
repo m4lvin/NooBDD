@@ -4,7 +4,7 @@ module Data.NooBdd (
   -- creation:
   top, bot, var,
   -- combination and manipulation:
-  neg, con, dis, imp, equ, conSet, disSet,
+  neg, con, dis, imp, equ, xor, conSet, disSet,
   forall, forallSet, exists, existsSet,
   restrict, restrictSet,
   -- get satisfying assignments:
@@ -61,6 +61,13 @@ equ x   Bot = neg x
 equ Top x   = x
 equ x   Top = x
 equ a   b   = apply equ a b
+
+xor :: Bdd -> Bdd -> Bdd
+xor Bot x   = x
+xor x   Bot = x
+xor Top x   = neg x
+xor x   Top = neg x
+xor a   b   = apply xor a b
 
 apply :: (Bdd -> Bdd -> Bdd) -> Bdd -> Bdd -> Bdd
 apply f as@(Node a alhs arhs) bs@(Node b blhs brhs) =
