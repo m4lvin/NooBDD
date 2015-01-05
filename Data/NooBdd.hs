@@ -1,32 +1,16 @@
 module Data.NooBdd (
-  -- type:
-  Bdd,
-  Assignment,
+  -- types:
+  Bdd, Assignment,
   -- creation:
-  top,
-  bot,
-  var,
+  top, bot, var,
   -- combination and manipulation:
-  neg,
-  con,
-  dis,
-  imp,
-  equ,
-  forall,
-  forallSet,
-  exists,
-  existsSet,
-  restrict,
-  restrictSet,
+  neg, con, dis, imp, equ, conSet, disSet,
+  forall, forallSet, exists, existsSet,
+  restrict, restrictSet,
   -- get satisfying assignments:
-  allSats,
-  allSatsWith,
-  anySat,
-  anySatWith,
-  -- visualization
-  genGraph,
-  showGraph
-  -- ...
+  allSats, allSatsWith, anySat, anySatWith,
+  -- visualization:
+  genGraph, showGraph
   ) where
 
 import Data.List
