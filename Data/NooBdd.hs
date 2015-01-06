@@ -81,7 +81,7 @@ compress :: Bdd -> Bdd
 compress Top = Top
 compress Bot = Bot
 compress (Node k lhs rhs) =
-  if (lhs == rhs) then lhs else (Node k (compress lhs) (compress rhs))
+  if (lhs == rhs) then (compress lhs) else (Node k (compress lhs) (compress rhs))
 
 conSet :: [Bdd] -> Bdd
 conSet [] = Top
@@ -186,26 +186,43 @@ anySatWith :: [Int] -> Bdd -> Maybe Assignment
 anySatWith _       Bot = Nothing
 anySatWith allvars b   = Just $ head $ completeAss allvars ass where (Just ass) = (anySat b)
 
+type Note = [Int]
+data AnnotatedBdd = ATop Note | ABot Note | ANode Int AnnotatedBdd AnnotatedBdd Note deriving (Show,Eq)
+
+noteOf :: AnnotatedBdd -> Note
+noteOf (ABot n) = n
+noteOf (ATop n) = n
+noteOf (ANode _ _ _ n) = n
+
+annotate :: Bdd -> AnnotatedBdd
+annotate Bot = ABot [0]
+annotate Top = ATop [1]
+annotate (Node k lhs rhs) = ANode k (annotate lhs) (annotate rhs) $
+  if ( noteOf (annotate lhs) == noteOf (annotate rhs) )
+    then noteOf (annotate lhs)
+    else (k:(noteOf $ annotate lhs)) ++ (k:(noteOf $ annotate rhs))
+
 genGraph :: Bdd -> String
-genGraph Bot = "digraph g { Bot [label=\"0\",shape=\"box\"]; }"
-genGraph Top = "digraph g { Top [label=\"1\",shape=\"box\"]; }"
-genGraph b = "digraph g {\n" ++ (genGraphStep "" b) ++ sinks ++ "}"
+genGraph (Bot) = "digraph g { Bot [label=\"0\",shape=\"box\"]; }"
+genGraph (Top) = "digraph g { Top [label=\"1\",shape=\"box\"]; }"
+genGraph b = "strict digraph g {\n" ++ (genGraphStep (annotate b)) ++ sinks ++ "}"
   where
-    genGraphStep _ Top = ""
-    genGraphStep _ Bot = ""
-    genGraphStep p (Node v lhs rhs) =
-      "v"++(show v)++"x"++p++" [label=\""++(show v)++"\",shape=\"circle\"];\n"
+    genGraphStep (ATop l) = ""
+    genGraphStep (ABot l) = ""
+    genGraphStep (ANode v lhs rhs l) =
+      "n"++(lp l)++" [label=\""++(show v)++"\",shape=\"circle\"];\n"
       ++ case lhs of
-	Top -> "v"++(show v)++"x"++p++" -> Top [style=dashed];\n"
-	Bot -> "v"++(show v)++"x"++p++" -> Bot [style=dashed];\n"
-	(Node v' _ _) -> "v"++(show v)++"x"++p++" -> v"++(show v')++"x"++('0':p)++" [style=dashed];\n"
-	++ genGraphStep ('0':p) lhs
+	(ATop _) -> "n"++(lp l)++" -> Top [style=dashed];\n"
+	(ABot _) -> "n"++(lp l)++" -> Bot [style=dashed];\n"
+	(ANode v' _ _ l') -> "n"++(lp l)++" -> n"++(lp l')++" [style=dashed];\n"
+	++ genGraphStep lhs
       ++ case rhs of
-	Top -> "v"++(show v)++"x"++p++" -> Top;\n"
-	Bot -> "v"++(show v)++"x"++p++" -> Bot;\n"
-	(Node v' _ _) -> "v"++(show v)++"x"++p++" -> v"++(show v')++"x"++('1':p)++";\n"
-	++ genGraphStep ('1':p) rhs
+	(ATop _) -> "n"++(lp l)++" -> Top;\n"
+	(ABot _) -> "n"++(lp l)++" -> Bot;\n"
+	(ANode v' _ _ l') -> "n"++(lp l)++" -> n"++(lp l')++";\n"
+	++ genGraphStep rhs
     sinks = "Bot [label=\"0\",shape=\"box\"];\n" ++ "Top [label=\"1\",shape=\"box\"];\n"
+    lp l = concat $ map show l
 
 showGraph :: Bdd -> IO ()
 showGraph b = do
