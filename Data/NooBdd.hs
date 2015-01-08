@@ -2,19 +2,23 @@ module Data.NooBdd (
   -- types:
   Bdd, Assignment,
   -- creation:
-  top, bot, var,
+  top, bot, var, node,
   -- combination and manipulation:
   neg, con, dis, imp, equ, xor, conSet, disSet,
   forall, forallSet, exists, existsSet,
   restrict, restrictSet,
+  gfp,
   -- get satisfying assignments:
-  allSats, allSatsWith, anySat, anySatWith,
+  allSats, allSatsWith, anySat, anySatWith, satCountWith,
   -- visualization:
-  genGraph, showGraph
+  genGraph, showGraph,
+  -- internal tools:
+  compress
   ) where
 
 import Data.List
 import System.Process
+import System.IO
 
 data Bdd = Top | Bot | Node Int Bdd Bdd deriving (Show,Eq)
 
@@ -26,6 +30,9 @@ bot = Bot
 
 var :: Int -> Bdd
 var n = Node n Bot Top
+
+node :: Int -> Bdd -> Bdd -> Bdd
+node v a b = Node v a b
 
 neg :: Bdd -> Bdd
 neg Top = Bot
@@ -142,10 +149,15 @@ existsSet ns (Node n lhs rhs) =
   if (elem n ns)
     then (dis (existsSet ns lhs) (existsSet ns rhs))
     else (Node n (existsSet ns lhs) (existsSet ns rhs))
-  
-example :: Int -> Bdd
-example 0 = equ (con (var 1) (dis (neg $ var 1) (var 0))) (con (var 0) (var 1))
-example _ = Bot
+
+-- greatest fixedpoint for a given operator
+gfp :: (Bdd -> Bdd) -> Bdd
+gfp operator = gfpStep operator top (operator top) where
+  gfpStep :: (Bdd -> Bdd) -> Bdd -> Bdd -> Bdd
+  gfpStep operator current next =
+    if (current == next)
+      then current
+      else gfpStep operator next (operator next)
 
 type Assignment = [(Int,Bool)] -- TODO: Ord instance, to beautify allSatsWith
 
@@ -186,8 +198,18 @@ anySatWith :: [Int] -> Bdd -> Maybe Assignment
 anySatWith _       Bot = Nothing
 anySatWith allvars b   = Just $ head $ completeAss allvars ass where (Just ass) = (anySat b)
 
+-- given a set of all vars, get the number of satisfying assignments
+-- this is not efficient and could be done without actually generating them!
+satCountWith :: [Int] -> Bdd -> Int
+satCountWith allvars b = length (allSatsWith allvars b)
+
 type Note = [Int]
 data AnnotatedBdd = ATop Note | ABot Note | ANode Int AnnotatedBdd AnnotatedBdd Note deriving (Show,Eq)
+
+varsOf :: Bdd -> [Int]
+varsOf Top = []
+varsOf Bot = []
+varsOf (Node v lhs rhs) = sort $ nub $ (v:(varsOf lhs) ++ (varsOf rhs))
 
 noteOf :: AnnotatedBdd -> Note
 noteOf (ABot n) = n
@@ -205,32 +227,39 @@ annotate (Node k lhs rhs) = ANode k (annotate lhs) (annotate rhs) $
 genGraph :: Bdd -> String
 genGraph (Bot) = "digraph g { Bot [label=\"0\",shape=\"box\"]; }"
 genGraph (Top) = "digraph g { Top [label=\"1\",shape=\"box\"]; }"
-genGraph b = "strict digraph g {\n" ++ (genGraphStep (annotate b)) ++ sinks ++ "}"
+genGraph b = "strict digraph g {\n" ++ (genGraphStep (annotate b)) ++ sinks ++ rankings ++ "}"
   where
-    genGraphStep (ATop l) = ""
-    genGraphStep (ABot l) = ""
     genGraphStep (ANode v lhs rhs l) =
       "n"++(lp l)++" [label=\""++(show v)++"\",shape=\"circle\"];\n"
       ++ case lhs of
 	(ATop _) -> "n"++(lp l)++" -> Top [style=dashed];\n"
 	(ABot _) -> "n"++(lp l)++" -> Bot [style=dashed];\n"
-	(ANode v' _ _ l') -> "n"++(lp l)++" -> n"++(lp l')++" [style=dashed];\n"
-	++ genGraphStep lhs
+	(ANode _ _ _ l') -> "n"++(lp l)++" -> n"++(lp l')++" [style=dashed];\n" ++ genGraphStep lhs
       ++ case rhs of
 	(ATop _) -> "n"++(lp l)++" -> Top;\n"
 	(ABot _) -> "n"++(lp l)++" -> Bot;\n"
-	(ANode v' _ _ l') -> "n"++(lp l)++" -> n"++(lp l')++";\n"
-	++ genGraphStep rhs
+	(ANode _ _ _ l') -> "n"++(lp l)++" -> n"++(lp l')++";\n" ++ genGraphStep rhs
+    genGraphStep _ = ""
     sinks = "Bot [label=\"0\",shape=\"box\"];\n" ++ "Top [label=\"1\",shape=\"box\"];\n"
+    rankings = concat [ "{ rank=same; "++(sepBy " " (nub $ nodesOf v (annotate b)))++" }\n" | v <- varsOf b ]
+    nodesOf _ (ABot _) = []
+    nodesOf _ (ATop _) = []
+    nodesOf v (ANode v' lhs rhs l) = if (v==v') then ["n"++lp l] else ((nodesOf v lhs) ++ (nodesOf v rhs))
+    sepBy _ [] = ""
+    sepBy _ [x] = x
+    sepBy c (x:xs) = x++c++(sepBy c xs)
     lp l = concat $ map show l
 
 showGraph :: Bdd -> IO ()
 showGraph b = do
-  let string = genGraph b
-  _ <- system ("echo '"++string++"' | dot -Tx11")
+  -- _ <- system ("echo '"++string++"' | dot -Tx11")
+  (inp,_,_,pid) <- runInteractiveProcess "/usr/bin/dot" ["-Tx11"] Nothing Nothing
+  hPutStr inp (genGraph b)
+  hFlush inp
+  hClose inp
+  _ <- waitForProcess pid
   return ()
 
 -- TODO:
--- satcount
 -- randomSat -- with correct probabilities, returning IO Bdd
 -- boolean apply and forall in parallel -- for optimization?
