@@ -4,7 +4,7 @@ module Data.NooBdd (
   -- creation:
   top, bot, var, node,
   -- combination and manipulation:
-  neg, con, dis, imp, equ, xor, conSet, disSet,
+  neg, con, dis, imp, equ, xor, conSet, disSet, xorSet,
   forall, forallSet, exists, existsSet,
   restrict, restrictSet,
   gfp,
