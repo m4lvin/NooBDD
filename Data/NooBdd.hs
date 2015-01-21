@@ -104,6 +104,10 @@ disSet (b:bs) =
     then Top
     else foldl dis b bs
 
+xorSet :: [Bdd] -> Bdd
+xorSet [] = Bot
+xorSet (b:bs) = foldl xor b bs
+
 forall :: Int -> Bdd -> Bdd
 forall _ Top = Top
 forall _ Bot = Bot
