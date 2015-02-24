@@ -8,7 +8,6 @@ module Data.NooBdd (
   forall, forallSet, exists, existsSet,
   restrict, restrictSet,
   gfp,
-  relabel,
   -- get satisfying assignments:
   allSats, allSatsWith, anySat, anySatWith, satCountWith,
   -- visualization:
@@ -163,15 +162,6 @@ gfp operator = gfpStep operator top (operator top) where
     if (current == next)
       then current
       else gfpStep operator next (operator next)
-
--- relabel variables
-relabel :: [(Int,Int)] -> Bdd -> Bdd
-relabel rel Top = Top
-relabel rel Bot = Bot
-relabel rel (Node n left right) = Node newn (relabel rel left) (relabel rel right) where
-  newn = case (lookup n rel) of
-	      (Just m) -> m
-	      Nothing  -> n
 
 type Assignment = [(Int,Bool)] -- TODO: Ord instance, to beautify allSatsWith
 
