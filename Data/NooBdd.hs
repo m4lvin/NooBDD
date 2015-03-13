@@ -157,17 +157,17 @@ existsSet ns (Node n lhs rhs) =
 
 -- greatest fixedpoint for a given operator
 gfp :: (Bdd -> Bdd) -> Bdd
-gfp operator = gfpStep operator top (operator top) where
-  gfpStep :: (Bdd -> Bdd) -> Bdd -> Bdd -> Bdd
-  gfpStep operator current next =
+gfp operator = gfpStep top (operator top) where
+  gfpStep :: Bdd -> Bdd -> Bdd
+  gfpStep current next =
     if (current == next)
       then current
-      else gfpStep operator next (operator next)
+      else gfpStep next (operator next)
 
 -- relabel variables
 relabel :: [(Int,Int)] -> Bdd -> Bdd
-relabel rel Top = Top
-relabel rel Bot = Bot
+relabel _   Top = Top
+relabel _   Bot = Bot
 relabel rel (Node n left right) = Node newn (relabel rel left) (relabel rel right) where
   newn = case (lookup n rel) of
 	      (Just m) -> m
@@ -238,6 +238,12 @@ annotate (Node k lhs rhs) = ANode k (annotate lhs) (annotate rhs) $
     then noteOf (annotate lhs)
     else (k:(noteOf $ annotate lhs)) ++ (k:(noteOf $ annotate rhs))
 
+allLabels :: AnnotatedBdd -> [Note]
+allLabels ab = nub $ allLabels' ab where
+  allLabels' (ABot n) = [n]
+  allLabels' (ATop n) = [n]
+  allLabels' (ANode _ lhs rhs l) = [l] ++ (allLabels lhs) ++ (allLabels rhs)
+
 genGraph :: Bdd -> String
 genGraph (Bot) = "digraph g { Bot [label=\"0\",shape=\"box\"]; }"
 genGraph (Top) = "digraph g { Top [label=\"1\",shape=\"box\"]; }"
@@ -262,7 +268,8 @@ genGraph b = "strict digraph g {\n" ++ (genGraphStep (annotate b)) ++ sinks ++ r
     sepBy _ [] = ""
     sepBy _ [x] = x
     sepBy c (x:xs) = x++c++(sepBy c xs)
-    lp l = concat $ map show l
+    lp l = show $ n where (Just n) = lookup l nodelabelling
+    nodelabelling = zip (allLabels (annotate b)) [(0::Int)..]
 
 showGraph :: Bdd -> IO ()
 showGraph b = do
