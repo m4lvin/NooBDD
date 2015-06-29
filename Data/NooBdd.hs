@@ -33,7 +33,7 @@ var :: Int -> Bdd
 var n = Node n Bot Top
 
 node :: Int -> Bdd -> Bdd -> Bdd
-node v a b = Node v a b
+node = Node
 
 neg :: Bdd -> Bdd
 neg Top = Bot
@@ -79,29 +79,29 @@ xor a   b   = apply xor a b
 
 apply :: (Bdd -> Bdd -> Bdd) -> Bdd -> Bdd -> Bdd
 apply f as@(Node a alhs arhs) bs@(Node b blhs brhs) =
-  compress $ case (compare a b) of
-       EQ -> (Node a (f alhs blhs) (f arhs brhs))
-       LT -> (Node a (f alhs bs) (f arhs bs))
-       GT -> (Node b (f as blhs) (f as brhs))
+  compress $ case compare a b of
+       EQ -> Node a (f alhs blhs) (f arhs brhs)
+       LT -> Node a (f alhs bs) (f arhs bs)
+       GT -> Node b (f as blhs) (f as brhs)
 apply _ _ _ = error "apply should not be called on constants!";
 
 compress :: Bdd -> Bdd
 compress Top = Top
 compress Bot = Bot
 compress (Node k lhs rhs) =
-  if (lhs == rhs) then (compress lhs) else (Node k (compress lhs) (compress rhs))
+  if lhs == rhs then compress lhs else Node k (compress lhs) (compress rhs)
 
 conSet :: [Bdd] -> Bdd
 conSet [] = Top
 conSet (b:bs) =
-  if elem Bot (b:bs)
+  if Bot `elem` (b:bs)
     then Bot
     else foldl con b bs
-    
+
 disSet :: [Bdd] -> Bdd
 disSet [] = Bot
 disSet (b:bs) =
-  if elem Top (b:bs)
+  if Top `elem` (b:bs)
     then Top
     else foldl dis b bs
 
@@ -113,31 +113,31 @@ forall :: Int -> Bdd -> Bdd
 forall _ Top = Top
 forall _ Bot = Bot
 forall n (Node m lhs rhs) =
-  if (n==m) then (con lhs rhs) else (Node m (forall n lhs) (forall n rhs))
+  if n==m then con lhs rhs else Node m (forall n lhs) (forall n rhs)
 
 forallSet :: [Int] -> Bdd -> Bdd
 forallSet _ Top = Top
 forallSet _ Bot = Bot
 forallSet ns (Node n lhs rhs) =
-  if (elem n ns)
-    then (con (forallSet ns lhs) (forallSet ns rhs))
-    else (Node n (forallSet ns lhs) (forallSet ns rhs))
+  if n `elem` ns
+    then con (forallSet ns lhs) (forallSet ns rhs)
+    else Node n (forallSet ns lhs) (forallSet ns rhs)
 
 restrict :: Bdd -> (Int,Bool) -> Bdd
 restrict Top _ = Top
 restrict Bot _ = Bot
 restrict (Node n lhs rhs) (m,b) =
-  compress $ case ((n==m),b) of
+  compress $ case (n==m,b) of
     (True,False) -> lhs
     (True,True) -> rhs
-    (False,_) -> (Node n (restrict lhs (m,b)) (restrict rhs (m,b)))
+    (False,_) -> Node n (restrict lhs (m,b)) (restrict rhs (m,b))
 
 restrictSet :: Bdd -> [(Int,Bool)] -> Bdd
 restrictSet Top _ = Top
 restrictSet Bot _ = Bot
 restrictSet (Node n lhs rhs) list =
-  compress $ case (lookup n list) of
-    Nothing    -> (Node n (restrictSet lhs list) (restrictSet rhs list))
+  compress $ case lookup n list of
+    Nothing    -> Node n (restrictSet lhs list) (restrictSet rhs list)
     Just False -> restrictSet lhs list
     Just True  -> restrictSet rhs list
 
@@ -145,22 +145,22 @@ exists :: Int -> Bdd -> Bdd
 exists _ Top = Top
 exists _ Bot = Bot
 exists n (Node m lhs rhs) =
-  if (n==m) then (dis lhs rhs) else (Node m (exists n lhs) (exists n rhs))
+  if n==m then dis lhs rhs else Node m (exists n lhs) (exists n rhs)
 
 existsSet :: [Int] -> Bdd -> Bdd
 existsSet _ Top = Top
 existsSet _ Bot = Bot
 existsSet ns (Node n lhs rhs) =
-  if (elem n ns)
-    then (dis (existsSet ns lhs) (existsSet ns rhs))
-    else (Node n (existsSet ns lhs) (existsSet ns rhs))
+  if n `elem` ns
+    then dis (existsSet ns lhs) (existsSet ns rhs)
+    else Node n (existsSet ns lhs) (existsSet ns rhs)
 
 -- greatest fixedpoint for a given operator
 gfp :: (Bdd -> Bdd) -> Bdd
 gfp operator = gfpStep top (operator top) where
   gfpStep :: Bdd -> Bdd -> Bdd
   gfpStep current next =
-    if (current == next)
+    if current == next
       then current
       else gfpStep next (operator next)
 
@@ -169,7 +169,7 @@ relabel :: [(Int,Int)] -> Bdd -> Bdd
 relabel _   Top = Top
 relabel _   Bot = Bot
 relabel rel (Node n left right) = Node newn (relabel rel left) (relabel rel right) where
-  newn = case (lookup n rel) of
+  newn = case lookup n rel of
 	      (Just m) -> m
 	      Nothing  -> n
 
@@ -180,37 +180,37 @@ allSats :: Bdd -> [Assignment]
 allSats Top = [ [] ]
 allSats Bot = [    ]
 allSats (Node n lhs rhs) =
-  [ ((n,False):rest) | rest <- allSats lhs ] ++
-  [ ((n,True ):rest) | rest <- allSats rhs ]
+  [ (n,False):rest | rest <- allSats lhs ] ++
+  [ (n,True ):rest | rest <- allSats rhs ]
 
 -- given a set of all vars, complete an assignment
 completeAss :: [Int] -> Assignment -> [Assignment]
 completeAss allvars ass =
-  if (addvars ass == [])
+  if null (addvars ass)
     then [ass]
-    else concat $ map (completeAss allvars) (extend ass (head (addvars ass)))
+    else concatMap (completeAss allvars) (extend ass (head (addvars ass)))
   where
-    addvars s = allvars \\ (sort $ map fst s)
-    extend s v = [ ((v,False):s), ((v,True):s) ]
-  
+    addvars s = allvars \\ sort (map fst s)
+    extend s v = [ (v,False):s, (v,True):s ]
+
 -- given a set of all vars, get all complete assignments
 -- (including those which might have disappeared in the BDD)
 allSatsWith :: [Int] -> Bdd -> [Assignment]
-allSatsWith allvars b = concat $ map (completeAss allvars) (allSats b) where
+allSatsWith allvars b = concatMap (completeAss allvars) (allSats b) where
 
 -- find the lexicographically smallest satisfying assignment
 anySat :: Bdd -> Maybe Assignment
 anySat Top = Just []
 anySat Bot = Nothing
-anySat (Node v lhs rhs) = 
+anySat (Node v lhs rhs) =
   case lhs of
        Top  -> Just []
-       Bot  -> Just ((v,True ):rest) where (Just rest) = (anySat rhs)
-       _    -> Just ((v,False):rest) where (Just rest) = (anySat lhs)
+       Bot  -> Just ((v,True ):rest) where (Just rest) = anySat rhs
+       _    -> Just ((v,False):rest) where (Just rest) = anySat lhs
 
 anySatWith :: [Int] -> Bdd -> Maybe Assignment
 anySatWith _       Bot = Nothing
-anySatWith allvars b   = Just $ head $ completeAss allvars ass where (Just ass) = (anySat b)
+anySatWith allvars b   = Just $ head $ completeAss allvars ass where (Just ass) = anySat b
 
 -- given a set of all vars, get the number of satisfying assignments
 -- this is not efficient and could be done without actually generating them!
@@ -223,7 +223,7 @@ data AnnotatedBdd = ATop Note | ABot Note | ANode Int AnnotatedBdd AnnotatedBdd 
 varsOf :: Bdd -> [Int]
 varsOf Top = []
 varsOf Bot = []
-varsOf (Node v lhs rhs) = sort $ nub $ (v:(varsOf lhs) ++ (varsOf rhs))
+varsOf (Node v lhs rhs) = sort $ nub (v:varsOf lhs ++ varsOf rhs)
 
 noteOf :: AnnotatedBdd -> Note
 noteOf (ABot n) = n
@@ -234,41 +234,41 @@ annotate :: Bdd -> AnnotatedBdd
 annotate Bot = ABot [0]
 annotate Top = ATop [1]
 annotate (Node k lhs rhs) = ANode k (annotate lhs) (annotate rhs) $
-  if ( noteOf (annotate lhs) == noteOf (annotate rhs) )
+  if noteOf (annotate lhs) == noteOf (annotate rhs)
     then noteOf (annotate lhs)
-    else (k:(noteOf $ annotate lhs)) ++ (k:(noteOf $ annotate rhs))
+    else (k:noteOf (annotate lhs)) ++ (k:noteOf (annotate rhs))
 
 allLabels :: AnnotatedBdd -> [Note]
 allLabels ab = nub $ allLabels' ab where
   allLabels' (ABot n) = [n]
   allLabels' (ATop n) = [n]
-  allLabels' (ANode _ lhs rhs l) = [l] ++ (allLabels lhs) ++ (allLabels rhs)
+  allLabels' (ANode _ lhs rhs l) = [l] ++ allLabels lhs ++ allLabels rhs
 
 genGraph :: Bdd -> String
 genGraph (Bot) = "digraph g { Bot [label=\"0\",shape=\"box\"]; }"
 genGraph (Top) = "digraph g { Top [label=\"1\",shape=\"box\"]; }"
-genGraph b = "strict digraph g {\n" ++ (genGraphStep (annotate b)) ++ sinks ++ rankings ++ "}"
+genGraph b = "strict digraph g {\n" ++ genGraphStep (annotate b) ++ sinks ++ rankings ++ "}"
   where
     genGraphStep (ANode v lhs rhs l) =
-      "n"++(lp l)++" [label=\""++(show v)++"\",shape=\"circle\"];\n"
+      "n"++ lp l ++" [label=\"" ++ show v ++ "\",shape=\"circle\"];\n"
       ++ case lhs of
-	(ATop _) -> "n"++(lp l)++" -> Top [style=dashed];\n"
-	(ABot _) -> "n"++(lp l)++" -> Bot [style=dashed];\n"
-	(ANode _ _ _ l') -> "n"++(lp l)++" -> n"++(lp l')++" [style=dashed];\n" ++ genGraphStep lhs
+	(ATop _) -> "n" ++ lp l ++ " -> Top [style=dashed];\n"
+	(ABot _) -> "n" ++ lp l ++ " -> Bot [style=dashed];\n"
+	(ANode _ _ _ l') -> "n" ++ lp l ++ " -> n" ++ lp l' ++ " [style=dashed];\n" ++ genGraphStep lhs
       ++ case rhs of
-	(ATop _) -> "n"++(lp l)++" -> Top;\n"
-	(ABot _) -> "n"++(lp l)++" -> Bot;\n"
-	(ANode _ _ _ l') -> "n"++(lp l)++" -> n"++(lp l')++";\n" ++ genGraphStep rhs
+	(ATop _) -> "n" ++ lp l ++ " -> Top;\n"
+	(ABot _) -> "n" ++ lp l ++ " -> Bot;\n"
+	(ANode _ _ _ l') -> "n" ++ lp l ++ " -> n" ++ lp l' ++ ";\n" ++ genGraphStep rhs
     genGraphStep _ = ""
     sinks = "Bot [label=\"0\",shape=\"box\"];\n" ++ "Top [label=\"1\",shape=\"box\"];\n"
-    rankings = concat [ "{ rank=same; "++(sepBy " " (nub $ nodesOf v (annotate b)))++" }\n" | v <- varsOf b ]
+    rankings = concat [ "{ rank=same; "++ sepBy " " (nub $ nodesOf v (annotate b))++" }\n" | v <- varsOf b ]
     nodesOf _ (ABot _) = []
     nodesOf _ (ATop _) = []
-    nodesOf v (ANode v' lhs rhs l) = if (v==v') then ["n"++lp l] else ((nodesOf v lhs) ++ (nodesOf v rhs))
+    nodesOf v (ANode v' lhs rhs l) = if v==v' then ["n"++lp l] else nodesOf v lhs ++ nodesOf v rhs
     sepBy _ [] = ""
     sepBy _ [x] = x
-    sepBy c (x:xs) = x++c++(sepBy c xs)
-    lp l = show $ n where (Just n) = lookup l nodelabelling
+    sepBy c (x:xs) = x ++ c ++ sepBy c xs
+    lp l = show n where (Just n) = lookup l nodelabelling
     nodelabelling = zip (allLabels (annotate b)) [(0::Int)..]
 
 showGraph :: Bdd -> IO ()
