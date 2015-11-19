@@ -170,8 +170,8 @@ relabel _   Top = Top
 relabel _   Bot = Bot
 relabel rel (Node n left right) = Node newn (relabel rel left) (relabel rel right) where
   newn = case lookup n rel of
-	      (Just m) -> m
-	      Nothing  -> n
+              (Just m) -> m
+              Nothing  -> n
 
 type Assignment = [(Int,Bool)] -- TODO: Ord instance, to beautify allSatsWith
 
@@ -252,13 +252,13 @@ genGraph b = "strict digraph g {\n" ++ genGraphStep (annotate b) ++ sinks ++ ran
     genGraphStep (ANode v lhs rhs l) =
       "n"++ lp l ++" [label=\"" ++ show v ++ "\",shape=\"circle\"];\n"
       ++ case lhs of
-	(ATop _) -> "n" ++ lp l ++ " -> Top [style=dashed];\n"
-	(ABot _) -> "n" ++ lp l ++ " -> Bot [style=dashed];\n"
-	(ANode _ _ _ l') -> "n" ++ lp l ++ " -> n" ++ lp l' ++ " [style=dashed];\n" ++ genGraphStep lhs
+        (ATop _) -> "n" ++ lp l ++ " -> Top [style=dashed];\n"
+        (ABot _) -> "n" ++ lp l ++ " -> Bot [style=dashed];\n"
+        (ANode _ _ _ l') -> "n" ++ lp l ++ " -> n" ++ lp l' ++ " [style=dashed];\n" ++ genGraphStep lhs
       ++ case rhs of
-	(ATop _) -> "n" ++ lp l ++ " -> Top;\n"
-	(ABot _) -> "n" ++ lp l ++ " -> Bot;\n"
-	(ANode _ _ _ l') -> "n" ++ lp l ++ " -> n" ++ lp l' ++ ";\n" ++ genGraphStep rhs
+        (ATop _) -> "n" ++ lp l ++ " -> Top;\n"
+        (ABot _) -> "n" ++ lp l ++ " -> Bot;\n"
+        (ANode _ _ _ l') -> "n" ++ lp l ++ " -> n" ++ lp l' ++ ";\n" ++ genGraphStep rhs
     genGraphStep _ = ""
     sinks = "Bot [label=\"0\",shape=\"box\"];\n" ++ "Top [label=\"1\",shape=\"box\"];\n"
     rankings = concat [ "{ rank=same; "++ sepBy " " (nub $ nodesOf v (annotate b))++" }\n" | v <- varsOf b ]
