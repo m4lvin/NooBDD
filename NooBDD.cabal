@@ -1,4 +1,4 @@
-name: NooBdd
+name: NooBDD
 version: 0.0.1
 synopsis: A pure implementation of BDDs in Haskell.
 license: GPL-2
