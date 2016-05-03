@@ -1,6 +1,8 @@
 NooBDD
 ======
 
+[![Build Status](https://travis-ci.org/m4lvin/NooBDD.svg?branch=master)](https://travis-ci.org/m4lvin/NooBDD)
+
 A pure implementation of BDDs in Haskell.
 
 Created for educational reasons, probably poor performance and many bugs.
