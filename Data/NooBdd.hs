@@ -196,7 +196,7 @@ completeAss allvars ass =
 -- given a set of all vars, get all complete assignments
 -- (including those which might have disappeared in the BDD)
 allSatsWith :: [Int] -> Bdd -> [Assignment]
-allSatsWith allvars b = concatMap (completeAss allvars) (allSats b) where
+allSatsWith allvars b = concatMap (completeAss allvars) (allSats b)
 
 -- find the lexicographically smallest satisfying assignment
 anySat :: Bdd -> Maybe Assignment
@@ -245,8 +245,8 @@ allLabels ab = nub $ allLabels' ab where
   allLabels' (ANode _ lhs rhs l) = [l] ++ allLabels lhs ++ allLabels rhs
 
 genGraph :: Bdd -> String
-genGraph (Bot) = "digraph g { Bot [label=\"0\",shape=\"box\"]; }"
-genGraph (Top) = "digraph g { Top [label=\"1\",shape=\"box\"]; }"
+genGraph Bot = "digraph g { Bot [label=\"0\",shape=\"box\"]; }"
+genGraph Top = "digraph g { Top [label=\"1\",shape=\"box\"]; }"
 genGraph b = "strict digraph g {\n" ++ genGraphStep (annotate b) ++ sinks ++ rankings ++ "}"
   where
     genGraphStep (ANode v lhs rhs l) =
