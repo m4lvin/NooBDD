@@ -19,10 +19,6 @@ cache:
 #
 # We set the compiler values here to tell Travis to use a different
 # cache file per set of arguments.
-#
-# If you need to have different apt packages for each combination in the
-# matrix, you can use a line such as:
-#     addons: {apt: {packages: [libfcgi-dev,libgmp-dev]}}
 matrix:
   include:
   # We grab the appropriate GHC and cabal-install versions from hvr's PPA. See:
@@ -36,12 +32,6 @@ matrix:
   - env: BUILD=cabal GHCVER=7.10.3 CABALVER=1.22 HAPPYVER=1.19.5 ALEXVER=3.1.7
     compiler: ": #GHC 7.10.3"
     addons: {apt: {packages: [cabal-install-1.22,ghc-7.10.3,happy-1.19.5,alex-3.1.7], sources: [hvr-ghc]}}
-
-  # Build with the newest GHC and cabal-install. This is an accepted failure,
-  # see below.
-  - env: BUILD=cabal GHCVER=head  CABALVER=head HAPPYVER=1.19.5 ALEXVER=3.1.7
-    compiler: ": #GHC HEAD"
-    addons: {apt: {packages: [cabal-install-head,ghc-head,happy-1.19.5,alex-3.1.7], sources: [hvr-ghc]}}
 
   # The Stack builds. We can pass in arbitrary Stack arguments via the ARGS
   # variable, such as using --stack-yaml to point to a different file.
@@ -61,11 +51,6 @@ matrix:
     compiler: ": #stack 7.10.3"
     addons: {apt: {packages: [ghc-7.10.3], sources: [hvr-ghc]}}
 
-  # Nightly builds are allowed to fail
-  - env: BUILD=stack ARGS="--resolver nightly"
-    compiler: ": #stack nightly"
-    addons: {apt: {packages: [libgmp,libgmp-dev]}}
-
   # Build on OS X in addition to Linux
   - env: BUILD=stack ARGS=""
     compiler: ": #stack default osx"
@@ -83,21 +68,9 @@ matrix:
     compiler: ": #stack 7.10.3 osx"
     os: osx
 
-  - env: BUILD=stack ARGS="--resolver nightly"
-    compiler: ": #stack nightly osx"
-    os: osx
-
-  allow_failures:
-  - env: BUILD=cabal GHCVER=head  CABALVER=head HAPPYVER=1.19.5 ALEXVER=3.1.7
-  - env: BUILD=stack ARGS="--resolver nightly"
-
 before_install:
 # Using compiler above sets CC to an invalid value, so unset it
 - unset CC
-
-# We want to always allow newer versions of packages when building on GHC HEAD
-- CABALARGS=""
-- if [ "x$GHCVER" = "xhead" ]; then CABALARGS=--allow-newer; fi
 
 # Download and unpack the stack executable
 - export PATH=/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:$HOME/.local/bin:/opt/alex/$ALEXVER/bin:/opt/happy/$HAPPYVER/bin:$HOME/.cabal/bin:$PATH
@@ -135,7 +108,7 @@ install:
     cabal)
       cabal --version
       travis_retry cabal update
-      cabal install --only-dependencies --enable-tests --enable-benchmarks --force-reinstalls --ghc-options=-O0 --reorder-goals --max-backjumps=-1 $CABALARGS $PACKAGES
+      cabal install --only-dependencies --enable-tests --enable-benchmarks --force-reinstalls --ghc-options=-O0 --reorder-goals --max-backjumps=-1 $PACKAGES
       ;;
   esac
   set +ex
@@ -148,7 +121,7 @@ script:
       stack --no-terminal $ARGS test --bench --no-run-benchmarks --haddock --no-haddock-deps
       ;;
     cabal)
-      cabal install --enable-tests --enable-benchmarks --force-reinstalls --ghc-options=-O0 --reorder-goals --max-backjumps=-1 $CABALARGS $PACKAGES
+      cabal install --enable-tests --enable-benchmarks --force-reinstalls --ghc-options=-O0 --reorder-goals --max-backjumps=-1 $PACKAGES
 
       ORIGDIR=$(pwd)
       for dir in $PACKAGES
